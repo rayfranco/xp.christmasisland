@@ -1,0 +1,40 @@
+<!DOCTYPE HTML>
+<html lang="en-US">
+<head>
+	<meta charset="UTF-8">
+	<title>Santa's Head Experiment</title>
+	<style>
+	canvas { 
+		background: #012336; 
+		width: 100%; 
+		height: 100%
+	} 
+	video { 
+		position: absolute; 
+		bottom: 30px; 
+		left: 30px;
+	}
+	#debugBar {
+		background: black;
+		color: green;
+		font-family: 'Menlo';
+		height: 40px;
+		width: 100%;
+		position: fixed;
+		top: 0;
+		text-align: center;
+		line-height: 14px;
+		font-size: 14px;
+	}
+	</style>
+</head>
+<body>
+	<canvas id="inputCanvas" width="320" height="240" style="display:none"></canvas>
+	<video id="inputVideo" autoplay loop></video>
+	<div id="debugBar"><p>Debugging...</p></div>
+	<audio src="assets/christmasisland.mp3" autoplay loop>
+	<script type="text/javascript" src="../vendor/headtrackr/headtrackr.js"></script>
+	<script type="text/javascript" src="../vendor/threejs/index.js"></script>
+	<script type="text/javascript" src="main.js"></script>
+</body>
+</html>
