@@ -6,6 +6,6 @@
     "headtrackr":"https://github.com/auduno/headtrackr.git",
     "buzz": "https://raw.github.com/jaysalvat/buzz/master/buzz.js",
     "tween": "https://raw.github.com/sole/tween.js/master/src/Tween.js",
-    "jquery": "latest"
+    "jquery": "http://code.jquery.com/jquery-1.8.3.min.js"
   }
 }

@@ -98,7 +98,7 @@
         _ref = this.flakes.vertices;
         for (_i = 0, _len = _ref.length; _i < _len; _i++) {
           flake = _ref[_i];
-          flake.implode(1500).animate();
+          flake.implode(2500).animate();
         }
         this.onAnimationEnd();
         return this;
@@ -114,6 +114,7 @@
       __extends(Flake, _super);
 
       function Flake(vector, r) {
+        var _this = this;
         if (r == null) {
           r = 2;
         }
@@ -132,24 +133,41 @@
           y: this.y * r,
           z: this.z * r
         };
+        this.explodeTween = new TWEEN.Tween(this).to(this.explodeSet, 2500).easing(TWEEN.Easing.Elastic.Out);
+        this.flakeTween = new TWEEN.Tween(this).to({
+          y: -200
+        }, 800);
+        this.implodeTween = new TWEEN.Tween(this).to(this.implodeSet, 2500).easing(TWEEN.Easing.Elastic.Out);
+        this.explodeTween.onComplete(function() {
+          return _this.flake;
+        });
+        this.flakeTween.onComplete(function() {
+          _this.y = 200;
+          if (_this.animation) {
+            return _this.animation.chain(_this.flakeTween);
+          } else {
+            return _this.animation = _this.flakeTween.start();
+          }
+        });
         return this;
       }
 
       Flake.prototype.explode = function(t) {
-        this.animation = new TWEEN.Tween(this).to(this.explodeSet, t).easing(TWEEN.Easing.Cubic.Out);
+        if (this.animation) {
+          this.animation.chain(this.explodeTween);
+        } else {
+          this.animation = this.explodeTween.start();
+        }
         return this;
       };
 
       Flake.prototype.implode = function(t) {
-        this.animation = new TWEEN.Tween(this).to(this.implodeSet, t).easing(TWEEN.Easing.Cubic.In);
+        this.animation = this.implodeTween.start();
         return this;
       };
 
       Flake.prototype.flake = function() {
-        if (this.y < -200) {
-          this.y = 200;
-        }
-        this.addSelf(this.velocity);
+        this.animation.chain(this.flakeTween);
         return this;
       };
 

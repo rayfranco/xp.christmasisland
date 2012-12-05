@@ -72,7 +72,7 @@ $ ->
 			@onAnimationEnd()
 			return @
 		implode: ->
-			flake.implode(1500).animate() for flake in @flakes.vertices
+			flake.implode(2500).animate() for flake in @flakes.vertices
 			@onAnimationEnd()
 			return @
 		onAnimationEnd: ->
@@ -84,6 +84,8 @@ $ ->
 			@x = vector.x
 			@y = vector.y
 			@z = vector.z
+
+
 			@implodeSet =
 				x: @x
 				y: @y
@@ -92,16 +94,26 @@ $ ->
 				x: @x * r
 				y: @y * r
 				z: @z * r
+
+			@explodeTween = new TWEEN.Tween(@).to(@explodeSet,2500).easing(TWEEN.Easing.Elastic.Out)
+			@flakeTween = new TWEEN.Tween(@).to({y: -200},800)
+			@implodeTween = new TWEEN.Tween(@).to(@implodeSet,2500).easing(TWEEN.Easing.Elastic.Out)
+
+			@explodeTween.onComplete => 
+				@flake
+			@flakeTween.onComplete =>
+				@y = 200
+				if @animation then @animation.chain(@flakeTween) else @animation = @flakeTween.start()
+
 			return @
 		explode: (t) ->
-			@animation = new TWEEN.Tween(@).to(@explodeSet,t).easing(TWEEN.Easing.Cubic.Out)
+			if @animation then @animation.chain(@explodeTween) else @animation = @explodeTween.start()
 			return @
 		implode: (t) ->
-			@animation = new TWEEN.Tween(@).to(@implodeSet,t).easing(TWEEN.Easing.Cubic.In)
+			@animation = @implodeTween.start()
 			return @
 		flake: ->
-			@y = 200 if @y < -200
-			@addSelf @velocity
+			@animation.chain(@flakeTween)
 			return @
 		animate: ->
 			@animation.start() if @animation
