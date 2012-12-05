@@ -3,6 +3,9 @@
   "version": "0.1.1",
   "dependencies": {
     "threejs": "https://raw.github.com/mrdoob/three.js/master/build/three.min.js",
-    "headtrackr":"https://github.com/auduno/headtrackr.git"
+    "headtrackr":"https://github.com/auduno/headtrackr.git",
+    "buzz": "https://raw.github.com/jaysalvat/buzz/master/buzz.js",
+    "tween": "https://raw.github.com/sole/tween.js/master/src/Tween.js",
+    "jquery": "latest"
   }
 }

@@ -1,85 +1,142 @@
-# Set up the scene
-scene = new THREE.Scene()
-camera = new THREE.PerspectiveCamera 75, window.innerWidth/window.innerHeight ,0.1, 1000
+throw "jQuery is not installed" if not $?
 
-# Set up the renderer
-renderer = new THREE.WebGLRenderer()
-renderer.setSize(window.innerWidth, window.innerHeight)
-document.body.appendChild(renderer.domElement);
+$ ->
+	# You CAN be nervous ;)
+	nerve = .5
 
-# Set up some objects
-geometry = new THREE.CubeGeometry 1, 1, 1
-material = new THREE.MeshLambertMaterial {color: 0xff0000}
-cube = new THREE.Mesh geometry, material
-scene.add cube
+	# Set up the scene
+	scene = new THREE.Scene()
+	camera = new THREE.PerspectiveCamera 75, window.innerWidth/window.innerHeight ,0.1, 1000
 
-# Lights up
-pointLight = new THREE.PointLight 0xFFFFFF
-pointLight.position.x = 10
-pointLight.position.y = 50
-pointLight.position.z = 130
-scene.add pointLight
+	# Set up the renderer
+	sceneCanvas = document.getElementById 'scene'
+	renderer = new THREE.WebGLRenderer({ canvas: sceneCanvas })
+	renderer.setSize(window.innerWidth, window.innerHeight)
+	# Set up some objects
+	# geometry = new THREE.CubeGeometry 1, 1, 1
+	# material = new THREE.MeshLambertMaterial {color: 0xff0000}
+	# cube = new THREE.Mesh geometry, material
+	# scene.add cube
 
-# Init camera position
-camera.position.z = 50
+	
+	# Set up the tracker
+	trackerCanvas 	= document.getElementById 'trackerCanvas'
+	trackerVideo 	= document.getElementById 'trackerVideo'
+	htracker = new headtrackr.Tracker({ui: false, headPosition: true, calcAngles: false})
+	htracker.init trackerVideo, trackerCanvas
+	htracker.start()
 
-# Render all that stuff
-render = ->
-	requestAnimationFrame render
-	renderer.render scene, camera
-	#cube.rotation.x += 0.1
-	#cube.rotation.y += 0.1
-render()
+	# Lights up
+	pointLight = new THREE.PointLight 0x0000FF
+	pointLight.position.x = 10
+	pointLight.position.y = 50
+	pointLight.position.z = 130
 
-# Set up the tracker
-videoInput = document.getElementById 'inputVideo'
-canvasInput = document.getElementById 'inputCanvas'
-htracker = new headtrackr.Tracker({ui: false, headPosition: true, calcAngles: false})
-htracker.init videoInput, canvasInput
-htracker.start()
+	scene.add pointLight
 
-# Add some particles
+	# Init camera position
+	camera.position.z = 50
+	camera.position.y = 50
 
-particleCount = 1800
-particles = new THREE.Geometry()
-pMaterial = new THREE.ParticleBasicMaterial { color: 0xFFFFFF, size: 2 }
+	# Add some particles
 
-for p in [0...1800]
-	pX = Math.random() * 500 - 250
-	pY = Math.random() * 500 - 250
-	pZ = Math.random() * 500 - 250
-	particle = new THREE.Vertex new THREE.Vector3(pX, pY, pZ)
-	particles.vertices.push(particle);
+	particleCount = 5000
+	particles = new THREE.Geometry()
+	material = new THREE.ParticleBasicMaterial({
+	    size: 10,
+	    map: THREE.ImageUtils.loadTexture("assets/particle.png"),
+	    blending: THREE.AdditiveBlending,
+	    depthTest: false,
+	    transparent: true
+	  });
 
-particleSystem = new THREE.ParticleSystem particles, pMaterial
+	for p in [0...particleCount]
+		pX = Math.random() * 500 - 250
+		pY = Math.random() * 500 - 250
+		pZ = Math.random() * 500 - 250
+		particle = new THREE.Vector3 pX, pY, pZ
+		particle.velocity = new THREE.Vector3 0, -Math.random(), 0
+		particles.vertices.push(particle);
 
-scene.add particleSystem
+	particleSystem = new THREE.ParticleSystem particles, material
 
-# Debug bar
+	particleSystem.sortParticles = true;
 
-class Debug
-	constructor: (el) ->
-		@el = document.getElementById(el)
-	message: (msg) ->
-		@el.innerHtml = msg
+	scene.add particleSystem
 
-debug = new Debug('debugBar');
+	# Add sounds to the game
+	throw "Buzz is not installed" if not buzz?
+	soundOptions =
+		preload: true
+		autoplay: false
+		loop: true
 
-# Give me some messages
-trackrStatuses =
-	"getUserMedia": "You got that camera"
-	"no getUserMedia": "u shy ? Turn that camera on..."
-	"camera found": "Camera is working"
-	"no camera": "Hey, u dat shy ?"
-	"detecting": "Don't hide, tryin to find u..."
-	"found": "Gotcha ! You can move now :)"
-	"lost": "Hey !! Where are ya ??"
-	"redetecting": "Tryin to find you again"
+	track1 = new buzz.sound 'assets/loop1.wav', soundOptions
+	track2 = new buzz.sound 'assets/loop2.wav', soundOptions
+	track3 = new buzz.sound 'assets/loop3.wav', soundOptions
+	buzz.all().bindOnce 'canplaythrough', ->
+		console.log 'canplaythrough'
+		buzz.all().play()
 
-document.addEventListener 'headtrackrStatus', (e) ->
-	if e.status of trackrStatuses
-		debug.message trackrStatuses[e.status]
+	# Set initial volumes
+	track1.setVolume 100
+	track2.setVolume 20
+	track3.setVolume 0
 
-document.addEventListener 'facetrackingEvent', (e) ->
-	camera.position.x = (e.x - 200) * -1
-	camera.position.y = (e.y - 100) * -1
+	console.log buzz.all()
+
+
+
+	# Render all that stuff
+	render = ->
+		TWEEN.update()
+		requestAnimationFrame render
+		renderer.render scene, camera
+
+		time = Date.now() * 0.00005
+		h = ( 360 * ( 1.0 + time ) % 360 ) / 360;
+		material.color.setHSV h, 1.0, 1.0
+
+		for i in [0...particleCount]
+			particle = particles.vertices[i]
+			particle.y = 200 if particle.y < -200
+			#particle.y -= Math.random() * .1
+			# if particle.isAnimated
+			# 	particle.isAnimated = true
+			new TWEEN.Tween(particle).to({x: particle.x + Math.random() * (nerve - 50) * 1000, y: particle.y + Math.random() * (nerve - 50) * 100},.2)
+			
+			particle.addSelf particle.velocity
+	render()
+
+	# Give me some messages
+	trackrStatuses =
+		"getUserMedia": "You got that camera"
+		"no getUserMedia": "u shy ? Turn that camera on..."
+		"camera found": "Camera is working"
+		"no camera": "Hey, u dat shy ?"
+		"detecting": "Don't hide, tryin to find u..."
+		"found": "Gotcha ! You can move now :)"
+		"lost": "Hey !! Where are ya ??"
+		"redetecting": "Tryin to find you again"
+
+	document.addEventListener 'headtrackrStatus', (e) ->
+		if e.status of trackrStatuses
+			console.log trackrStatuses[e.status]
+
+	document.addEventListener 'facetrackingEvent', (e) ->
+		percentX = nerve = e.x / 320
+		percentY = e.y / 240
+
+		new TWEEN.Tween(camera.position).to({x: -percentX * 200, y: percentY * 200}, 980).easing(TWEEN.Easing.Cubic.Out).onUpdate(()->
+			#console.log @x
+		).start();
+
+		#sound update
+		track1.setVolume percentX * 100
+		track2.setVolume 100 - percentX * 100
+		track3.setVolume 100 - percentX * 150
+
+
+	#for test purpose
+	window.camera = camera
+

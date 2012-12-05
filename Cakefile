@@ -18,6 +18,13 @@ task 'build:prod', ->
       'src/main.coffee'
     ], 'app/main.js'
 
+task 'package', ->
+  bundle [
+    'src/Ambiance.coffee',
+    'src/Particle.coffee',
+    'src/main.coffee'
+  ], 'app/app.js'
+
 task 'build', ->
 	console.log 'Building the sources...'
 	invoke 'build:dev'
