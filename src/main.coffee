@@ -12,11 +12,13 @@ $ ->
 	sceneCanvas = document.getElementById 'scene'
 	renderer = new THREE.WebGLRenderer({ canvas: sceneCanvas })
 	renderer.setSize(window.innerWidth, window.innerHeight)
-	# Set up some objects
-	# geometry = new THREE.CubeGeometry 1, 1, 1
-	# material = new THREE.MeshLambertMaterial {color: 0xff0000}
-	# cube = new THREE.Mesh geometry, material
-	# scene.add cube
+
+	# Set up central 
+	geometry = new THREE.SphereGeometry 50, 16, 16
+	material = new THREE.MeshLambertMaterial {color: 0xff0000}
+	cube = new THREE.Mesh geometry, material
+	cube.position = new THREE.Vector3 0, 0, 0
+	scene.add cube
 
 	
 	# Set up the tracker
@@ -35,34 +37,88 @@ $ ->
 	scene.add pointLight
 
 	# Init camera position
-	camera.position.z = 50
+	camera.position.z = 500
 	camera.position.y = 50
+	camera.lookAt(cube.position)
 
 	# Add some particles
 
-	particleCount = 5000
-	particles = new THREE.Geometry()
-	material = new THREE.ParticleBasicMaterial({
-	    size: 10,
-	    map: THREE.ImageUtils.loadTexture("assets/particle.png"),
-	    blending: THREE.AdditiveBlending,
-	    depthTest: false,
-	    transparent: true
-	  });
+	class FlakeStorm
+		constructor: (@scene, @subject, @count) ->
+			@flakes = new THREE.Geometry()
+			@material = new THREE.ParticleBasicMaterial({
+				size: 2,
+				map: THREE.ImageUtils.loadTexture("assets/particle.png"),
+				blending: THREE.AdditiveBlending,
+				depthTest: false,
+				transparent: true
+			})
+			@points = new THREE.GeometryUtils.randomPointsInGeometry @subject, @count
+			for i in [0...@count]
+				particle = new Flake @points[i], 10
+				particle.explode()
+				@flakes.vertices.push(particle)
+			@system = new THREE.ParticleSystem @flakes, @material
+			console.log @flakes
+			@system.sortParticles = true;
+			console.log @flakes
+			@scene.add @system
+			console.log @flakes
+			return @
+		flake: ->
+			flake.flake() for flake in @flakes.vertices
+		explode: ->
+			flake.explode(2500).animate() for flake in @flakes.vertices
+			@onAnimationEnd()
+			return @
+		implode: ->
+			flake.implode(1500).animate() for flake in @flakes.vertices
+			@onAnimationEnd()
+			return @
+		onAnimationEnd: ->
 
-	for p in [0...particleCount]
-		pX = Math.random() * 500 - 250
-		pY = Math.random() * 500 - 250
-		pZ = Math.random() * 500 - 250
-		particle = new THREE.Vector3 pX, pY, pZ
-		particle.velocity = new THREE.Vector3 0, -Math.random(), 0
-		particles.vertices.push(particle);
+	class Flake extends THREE.Vector3
+		constructor: (vector, r=2) ->
+			@velocity = new THREE.Vector3 0, -Math.random() + 1, 0
+			@animation = null
+			@x = vector.x
+			@y = vector.y
+			@z = vector.z
+			@implodeSet =
+				x: @x
+				y: @y
+				z: @z
+			@explodeSet =
+				x: @x * r
+				y: @y * r
+				z: @z * r
+			return @
+		explode: (t) ->
+			@animation = new TWEEN.Tween(@).to(@explodeSet,t).easing(TWEEN.Easing.Cubic.Out)
+			return @
+		implode: (t) ->
+			@animation = new TWEEN.Tween(@).to(@implodeSet,t).easing(TWEEN.Easing.Cubic.In)
+			return @
+		flake: ->
+			@y = 200 if @y < -200
+			@addSelf @velocity
+			return @
+		animate: ->
+			@animation.start() if @animation
+			return @
 
-	particleSystem = new THREE.ParticleSystem particles, material
+	PARTICLES_COUNT = 1500
 
-	particleSystem.sortParticles = true;
+	storm = new FlakeStorm scene, geometry, PARTICLES_COUNT
 
-	scene.add particleSystem
+	animated = 1
+	$(document).click -> 
+		if animated is 1
+			storm.explode()
+			animated = 0
+		else
+			storm.implode()
+			animated = 1
 
 	# Add sounds to the game
 	throw "Buzz is not installed" if not buzz?
@@ -83,29 +139,14 @@ $ ->
 	track2.setVolume 20
 	track3.setVolume 0
 
-	console.log buzz.all()
-
-
+	buzz.all()
 
 	# Render all that stuff
 	render = ->
 		TWEEN.update()
+		storm.system.rotation.y += 0.01
 		requestAnimationFrame render
 		renderer.render scene, camera
-
-		time = Date.now() * 0.00005
-		h = ( 360 * ( 1.0 + time ) % 360 ) / 360;
-		material.color.setHSV h, 1.0, 1.0
-
-		for i in [0...particleCount]
-			particle = particles.vertices[i]
-			particle.y = 200 if particle.y < -200
-			#particle.y -= Math.random() * .1
-			# if particle.isAnimated
-			# 	particle.isAnimated = true
-			new TWEEN.Tween(particle).to({x: particle.x + Math.random() * (nerve - 50) * 1000, y: particle.y + Math.random() * (nerve - 50) * 100},.2)
-			
-			particle.addSelf particle.velocity
 	render()
 
 	# Give me some messages
