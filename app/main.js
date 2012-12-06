@@ -7,23 +7,49 @@
     throw "jQuery is not installed";
   }
 
+  if (!(typeof buzz !== "undefined" && buzz !== null)) {
+    throw "Buzz is not installed";
+  }
+
   $(function() {
-    var Flake, FlakeStorm, PARTICLES_COUNT, animated, camera, cube, geometry, htracker, material, nerve, pointLight, render, renderer, scene, sceneCanvas, soundOptions, storm, track1, track2, track3, trackerCanvas, trackerVideo, trackrStatuses;
+    var CAMERA_DISTANCE, FLAKES_COUNT, Flake, FlakeStorm, ballDown, ballUp, camera, composer, darkenScreen, directionalLight, effectColorify, effectFilm, effectVignette, geometry, htracker, light, lightenScreen, material, mesh, nerve, percentX, percentY, pointLight, rParameters, render, renderModel, renderer, rtParameters, scene, sceneCanvas, shader, smParameters, soundOptions, start, storm, textureCube, track1, track2, track3, trackerCanvas, trackerVideo, trackrStatuses, urlPrefix, urls;
+    FLAKES_COUNT = 15000;
+    CAMERA_DISTANCE = 200;
     nerve = .5;
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 120000);
+    camera.position.z = 200;
+    camera.position.y = 0;
+    rParameters = {
+      canvas: sceneCanvas,
+      clearColor: 0xFFFFFF,
+      clearAlpha: 0,
+      antialias: false,
+      autoClear: false,
+      gammaInput: true,
+      gammaOutput: true,
+      sort: false
+    };
     sceneCanvas = document.getElementById('scene');
-    renderer = new THREE.WebGLRenderer({
-      canvas: sceneCanvas
-    });
+    renderer = new THREE.WebGLRenderer;
     renderer.setSize(window.innerWidth, window.innerHeight);
-    geometry = new THREE.SphereGeometry(50, 16, 16);
-    material = new THREE.MeshLambertMaterial({
-      color: 0xff0000
-    });
-    cube = new THREE.Mesh(geometry, material);
-    cube.position = new THREE.Vector3(0, 0, 0);
-    scene.add(cube);
+    renderModel = new THREE.RenderPass(scene, camera);
+    effectFilm = new THREE.FilmPass(3, 0.1, 0, true);
+    effectVignette = new THREE.ShaderPass(THREE.VignetteShader);
+    effectColorify = new THREE.ShaderPass(THREE.ColorifyShader);
+    effectVignette.uniforms["offset"].value = 0.8;
+    effectVignette.uniforms["darkness"].value = 2;
+    effectVignette.renderToScreen = true;
+    rtParameters = {
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      format: THREE.RGBFormat,
+      stencilBuffer: true
+    };
+    composer = new THREE.EffectComposer(renderer, new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, rtParameters));
+    composer.addPass(renderModel);
+    composer.addPass(effectFilm);
+    composer.addPass(effectVignette);
     trackerCanvas = document.getElementById('trackerCanvas');
     trackerVideo = document.getElementById('trackerVideo');
     htracker = new headtrackr.Tracker({
@@ -33,14 +59,55 @@
     });
     htracker.init(trackerVideo, trackerCanvas);
     htracker.start();
+    urlPrefix = "assets/textures/skybox/";
+    urls = [urlPrefix + "posx.jpg", urlPrefix + "negx.jpg", urlPrefix + "posy.jpg", urlPrefix + "negy.jpg", urlPrefix + "posz.jpg", urlPrefix + "negz.jpg"];
+    textureCube = THREE.ImageUtils.loadTextureCube(urls);
+    geometry = new THREE.SphereGeometry(100, 32, 16);
+    material = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      envMap: textureCube
+    });
+    mesh = new THREE.Mesh(geometry, material);
+    mesh.position.x = 0;
+    mesh.position.y = 0;
+    mesh.position.z = 0;
+    mesh.scale.x = mesh.scale.y = mesh.scale.z = 1;
+    scene.add(mesh);
+    ballDown = new TWEEN.Tween(mesh.position).to({
+      y: -20
+    }, 5000).easing(TWEEN.Easing.Cubic.InOut);
+    ballUp = new TWEEN.Tween(mesh.position).to({
+      y: 20
+    }, 5000).easing(TWEEN.Easing.Cubic.InOut);
+    start = new TWEEN.Tween(mesh.position).to({
+      y: 20
+    }, 2500).start().chain(ballDown).easing(TWEEN.Easing.Cubic.Out);
+    ballDown.chain(ballUp);
+    ballUp.chain(ballDown);
+    shader = THREE.ShaderUtils.lib["cube"];
+    smParameters = {
+      fragmentShader: shader.fragmentShader,
+      vertexShader: shader.vertexShader,
+      uniforms: shader.uniforms,
+      depthWrite: false,
+      side: THREE.BackSide
+    };
+    shader.uniforms['tCube'].value = textureCube;
+    material = new THREE.ShaderMaterial(smParameters);
+    mesh = new THREE.Mesh(new THREE.CubeGeometry(10000, 10000, 10000), material);
+    scene.add(mesh);
     pointLight = new THREE.PointLight(0x0000FF);
     pointLight.position.x = 10;
     pointLight.position.y = 50;
     pointLight.position.z = 130;
     scene.add(pointLight);
-    camera.position.z = 500;
-    camera.position.y = 50;
-    camera.lookAt(cube.position);
+    directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.x = 1;
+    directionalLight.position.y = 1;
+    directionalLight.position.z = 0;
+    scene.add(directionalLight);
+    light = new THREE.AmbientLight(0x666666);
+    scene.add(light);
     FlakeStorm = (function() {
 
       function FlakeStorm(scene, subject, count) {
@@ -50,16 +117,15 @@
         this.count = count;
         this.flakes = new THREE.Geometry();
         this.material = new THREE.ParticleBasicMaterial({
-          size: 2,
+          size: 5,
           map: THREE.ImageUtils.loadTexture("assets/particle.png"),
           blending: THREE.AdditiveBlending,
-          depthTest: false,
           transparent: true
         });
         this.points = new THREE.GeometryUtils.randomPointsInGeometry(this.subject, this.count);
         for (i = _i = 0, _ref = this.count; 0 <= _ref ? _i < _ref : _i > _ref; i = 0 <= _ref ? ++_i : --_i) {
-          particle = new Flake(this.points[i], 10);
-          particle.explode();
+          this.points[i] = new THREE.Vector3(Math.random() * 400 - 200, Math.random() * 400 - 200, Math.random() * 2000 - 1000);
+          particle = new Flake(this.points[i], 50);
           this.flakes.vertices.push(particle);
         }
         this.system = new THREE.ParticleSystem(this.flakes, this.material);
@@ -71,40 +137,27 @@
         return this;
       }
 
-      FlakeStorm.prototype.flake = function() {
+      FlakeStorm.prototype.update = function() {
         var flake, _i, _len, _ref, _results;
         _ref = this.flakes.vertices;
         _results = [];
         for (_i = 0, _len = _ref.length; _i < _len; _i++) {
           flake = _ref[_i];
-          _results.push(flake.flake());
+          if (flake.y < -200) {
+            flake.y = 200;
+          }
+          if (flake.x < -200) {
+            flake.x = 200;
+          }
+          if (flake.x > 200) {
+            _results.push(flake.x = -200);
+          } else {
+            flake.y -= 0.5 * Math.random();
+            _results.push(flake.x -= 0.5 * Math.random());
+          }
         }
         return _results;
       };
-
-      FlakeStorm.prototype.explode = function() {
-        var flake, _i, _len, _ref;
-        _ref = this.flakes.vertices;
-        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-          flake = _ref[_i];
-          flake.explode(2500).animate();
-        }
-        this.onAnimationEnd();
-        return this;
-      };
-
-      FlakeStorm.prototype.implode = function() {
-        var flake, _i, _len, _ref;
-        _ref = this.flakes.vertices;
-        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-          flake = _ref[_i];
-          flake.implode(2500).animate();
-        }
-        this.onAnimationEnd();
-        return this;
-      };
-
-      FlakeStorm.prototype.onAnimationEnd = function() {};
 
       return FlakeStorm;
 
@@ -114,7 +167,6 @@
       __extends(Flake, _super);
 
       function Flake(vector, r) {
-        var _this = this;
         if (r == null) {
           r = 2;
         }
@@ -123,79 +175,13 @@
         this.x = vector.x;
         this.y = vector.y;
         this.z = vector.z;
-        this.implodeSet = {
-          x: this.x,
-          y: this.y,
-          z: this.z
-        };
-        this.explodeSet = {
-          x: this.x * r,
-          y: this.y * r,
-          z: this.z * r
-        };
-        this.explodeTween = new TWEEN.Tween(this).to(this.explodeSet, 2500).easing(TWEEN.Easing.Elastic.Out);
-        this.flakeTween = new TWEEN.Tween(this).to({
-          y: -200
-        }, 800);
-        this.implodeTween = new TWEEN.Tween(this).to(this.implodeSet, 2500).easing(TWEEN.Easing.Elastic.Out);
-        this.explodeTween.onComplete(function() {
-          return _this.flake;
-        });
-        this.flakeTween.onComplete(function() {
-          _this.y = 200;
-          if (_this.animation) {
-            return _this.animation.chain(_this.flakeTween);
-          } else {
-            return _this.animation = _this.flakeTween.start();
-          }
-        });
         return this;
       }
-
-      Flake.prototype.explode = function(t) {
-        if (this.animation) {
-          this.animation.chain(this.explodeTween);
-        } else {
-          this.animation = this.explodeTween.start();
-        }
-        return this;
-      };
-
-      Flake.prototype.implode = function(t) {
-        this.animation = this.implodeTween.start();
-        return this;
-      };
-
-      Flake.prototype.flake = function() {
-        this.animation.chain(this.flakeTween);
-        return this;
-      };
-
-      Flake.prototype.animate = function() {
-        if (this.animation) {
-          this.animation.start();
-        }
-        return this;
-      };
 
       return Flake;
 
     })(THREE.Vector3);
-    PARTICLES_COUNT = 1500;
-    storm = new FlakeStorm(scene, geometry, PARTICLES_COUNT);
-    animated = 1;
-    $(document).click(function() {
-      if (animated === 1) {
-        storm.explode();
-        return animated = 0;
-      } else {
-        storm.implode();
-        return animated = 1;
-      }
-    });
-    if (!(typeof buzz !== "undefined" && buzz !== null)) {
-      throw "Buzz is not installed";
-    }
+    storm = new FlakeStorm(scene, geometry, FLAKES_COUNT);
     soundOptions = {
       preload: true,
       autoplay: false,
@@ -212,11 +198,20 @@
     track2.setVolume(20);
     track3.setVolume(0);
     buzz.all();
+    percentX = .5;
+    percentY = .5;
     render = function() {
+      var camX, camZ;
       TWEEN.update();
-      storm.system.rotation.y += 0.01;
       requestAnimationFrame(render);
-      return renderer.render(scene, camera);
+      renderer.render(scene, camera);
+      storm.update();
+      camX = percentX * 400 - 200;
+      camZ = Math.sqrt(Math.pow(200, 2) - Math.pow(camX, 2));
+      new TWEEN.Tween(camera.position).to({
+        x: camX
+      }, 980).easing(TWEEN.Easing.Cubic.Out).start();
+      return composer.render(0.0001);
     };
     render();
     trackrStatuses = {
@@ -235,18 +230,42 @@
       }
     });
     document.addEventListener('facetrackingEvent', function(e) {
-      var percentX, percentY;
-      percentX = nerve = e.x / 320;
-      percentY = e.y / 240;
-      new TWEEN.Tween(camera.position).to({
-        x: -percentX * 200,
-        y: percentY * 200
-      }, 980).easing(TWEEN.Easing.Cubic.Out).onUpdate(function() {}).start();
+      percentX = nerve = 1 - e.x / 318;
+      percentY = 1 - e.y / 240;
       track1.setVolume(percentX * 100);
       track2.setVolume(100 - percentX * 100);
       return track3.setVolume(100 - percentX * 150);
     });
-    return window.camera = camera;
+    lightenScreen = function() {
+      var anim;
+      anim = new TWEEN.Tween({
+        grayscale: 0,
+        nIntensity: 0.1
+      }).to({
+        grayscale: 1,
+        nIntensity: 3
+      }, 500).easing(TWEEN.Easing.Cubic.Out);
+      anim.onUpdate(function() {
+        effectFilm.uniforms["grayscale"].value = this.grayscale;
+        return effectFilm.uniforms["nIntensity"].value = this.nIntensity;
+      });
+      return anim.start();
+    };
+    return darkenScreen = function() {
+      var anim;
+      anim = new TWEEN.Tween({
+        grayscale: 1,
+        nIntensity: 3
+      }).to({
+        grayscale: 0,
+        nIntensity: 0.1
+      }, 500).easing(TWEEN.Easing.Cubic.Out);
+      anim.onUpdate(function() {
+        effectFilm.uniforms["grayscale"].value = this.grayscale;
+        return effectFilm.uniforms["nIntensity"].value = this.nIntensity;
+      });
+      return anim.start();
+    };
   });
 
 }).call(this);

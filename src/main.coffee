@@ -1,62 +1,146 @@
 throw "jQuery is not installed" if not $?
+throw "Buzz is not installed" if not buzz?
 
 $ ->
-	# You CAN be nervous ;)
-	nerve = .5
+
+	# Configuration
+	FLAKES_COUNT 	= 15000
+	CAMERA_DISTANCE = 200
+
+	# Variables
+	nerve = .5 		# Environment tension
+
+	#
+	# Initialisation
+	#
 
 	# Set up the scene
-	scene = new THREE.Scene()
-	camera = new THREE.PerspectiveCamera 75, window.innerWidth/window.innerHeight ,0.1, 1000
+	scene 	= new THREE.Scene()
+
+	# Set up the camera
+	camera 				= new THREE.PerspectiveCamera 75, window.innerWidth/window.innerHeight ,1, 120000
+	camera.position.z 	= 200
+	camera.position.y 	= 0
 
 	# Set up the renderer
+	rParameters =
+		canvas: sceneCanvas
+		clearColor: 0xFFFFFF
+		clearAlpha: 0
+		antialias: false
+		autoClear: false
+		gammaInput: true
+		gammaOutput: true
+		sort: false
 	sceneCanvas = document.getElementById 'scene'
-	renderer = new THREE.WebGLRenderer({ canvas: sceneCanvas })
-	renderer.setSize(window.innerWidth, window.innerHeight)
+	renderer 	= new THREE.WebGLRenderer
+	renderer.setSize window.innerWidth, window.innerHeight
 
-	# Set up central 
-	geometry = new THREE.SphereGeometry 50, 16, 16
-	material = new THREE.MeshLambertMaterial {color: 0xff0000}
-	cube = new THREE.Mesh geometry, material
-	cube.position = new THREE.Vector3 0, 0, 0
-	scene.add cube
+	# Post Processing
+	renderModel 	= new THREE.RenderPass scene, camera
+	effectFilm 		= new THREE.FilmPass 3, 0.1, 0, true
+	effectVignette 	= new THREE.ShaderPass THREE.VignetteShader
+	effectColorify 	= new THREE.ShaderPass THREE.ColorifyShader
 
-	
-	# Set up the tracker
+	effectVignette.uniforms["offset"].value 	= 0.8;
+	effectVignette.uniforms["darkness"].value 	= 2;
+	effectVignette.renderToScreen = true
+
+	rtParameters = 
+		minFilter: THREE.LinearFilter
+		magFilter: THREE.LinearFilter
+		format: THREE.RGBFormat
+		stencilBuffer: true
+
+	composer = new THREE.EffectComposer renderer, new THREE.WebGLRenderTarget window.innerWidth, window.innerHeight, rtParameters
+
+	composer.addPass renderModel
+	composer.addPass effectFilm
+	composer.addPass effectVignette
+
+	# Set up the head tracker
 	trackerCanvas 	= document.getElementById 'trackerCanvas'
 	trackerVideo 	= document.getElementById 'trackerVideo'
-	htracker = new headtrackr.Tracker({ui: false, headPosition: true, calcAngles: false})
+	htracker 		= new headtrackr.Tracker({ui: false, headPosition: true, calcAngles: false})
+
 	htracker.init trackerVideo, trackerCanvas
-	htracker.start()
+	htracker.start() 	# We will listen to events later, get ready !
+
+	# Load the skybox textures
+	urlPrefix 	= "assets/textures/skybox/"
+	urls 		= [ urlPrefix + "posx.jpg", urlPrefix + "negx.jpg",
+    				urlPrefix + "posy.jpg", urlPrefix + "negy.jpg",
+    				urlPrefix + "posz.jpg", urlPrefix + "negz.jpg" ]
+	textureCube = THREE.ImageUtils.loadTextureCube(urls)
+
+	# Load the main subject, a ball (yeah a ball, so what?)
+	geometry 		= new THREE.SphereGeometry( 100, 32, 16 );
+	material 		= new THREE.MeshBasicMaterial( { color: 0xffffff, envMap: textureCube } );
+	mesh 			= new THREE.Mesh geometry, material
+	mesh.position.x = 0 #Math.random() * 10000 - 5000
+	mesh.position.y = 0 #Math.random() * 10000 - 5000
+	mesh.position.z = 0 #Math.random() * 10000 - 5000
+	mesh.scale.x 	= mesh.scale.y = mesh.scale.z = 1;
+
+	scene.add mesh
+
+	# Let's animate the ball
+	ballDown 	= new TWEEN.Tween(mesh.position).to({y:-20},5000).easing(TWEEN.Easing.Cubic.InOut)
+	ballUp 	 	= new TWEEN.Tween(mesh.position).to({y:20},5000).easing(TWEEN.Easing.Cubic.InOut)
+	start 		= new TWEEN.Tween(mesh.position).to({y:20},2500).start().chain(ballDown).easing(TWEEN.Easing.Cubic.Out)
+	ballDown.chain(ballUp) # Get up
+	ballUp.chain(ballDown) # Get down
+	
+	# Make the skybox, it's getting nice now !
+	shader 	 		= THREE.ShaderUtils.lib["cube"]
+	smParameters 	=
+		fragmentShader: shader.fragmentShader
+		vertexShader: shader.vertexShader
+		uniforms: shader.uniforms
+		depthWrite: false
+		side: THREE.BackSide
+
+	shader.uniforms['tCube'].value = textureCube
+
+	material = new THREE.ShaderMaterial smParameters
+	mesh  	 = new THREE.Mesh( new THREE.CubeGeometry( 10000, 10000, 10000 ), material )
+
+	scene.add mesh
 
 	# Lights up
-	pointLight = new THREE.PointLight 0x0000FF
-	pointLight.position.x = 10
-	pointLight.position.y = 50
-	pointLight.position.z = 130
+	pointLight 				= new THREE.PointLight 0x0000FF
+	pointLight.position.x 	= 10
+	pointLight.position.y 	= 50
+	pointLight.position.z 	= 130
 
 	scene.add pointLight
 
-	# Init camera position
-	camera.position.z = 500
-	camera.position.y = 50
-	camera.lookAt(cube.position)
+	directionalLight 		= new THREE.DirectionalLight 0xffffff, 1
+	directionalLight.position.x = 1
+	directionalLight.position.y = 1
+	directionalLight.position.z = 0
 
-	# Add some particles
+	scene.add directionalLight
 
+	light = new THREE.AmbientLight 0x666666
+	
+	scene.add light
+
+	# This will be our particle manager, experimental !
 	class FlakeStorm
 		constructor: (@scene, @subject, @count) ->
 			@flakes = new THREE.Geometry()
 			@material = new THREE.ParticleBasicMaterial({
-				size: 2,
+				size: 5,
 				map: THREE.ImageUtils.loadTexture("assets/particle.png"),
 				blending: THREE.AdditiveBlending,
-				depthTest: false,
 				transparent: true
 			})
 			@points = new THREE.GeometryUtils.randomPointsInGeometry @subject, @count
 			for i in [0...@count]
-				particle = new Flake @points[i], 10
-				particle.explode()
+				@points[i] = new THREE.Vector3 Math.random() * 400 - 200, Math.random() * 400 - 200, Math.random() * 2000 - 1000
+				particle = new Flake @points[i], 50
+				#particle.explode()
 				@flakes.vertices.push(particle)
 			@system = new THREE.ParticleSystem @flakes, @material
 			console.log @flakes
@@ -65,18 +149,19 @@ $ ->
 			@scene.add @system
 			console.log @flakes
 			return @
-		flake: ->
-			flake.flake() for flake in @flakes.vertices
-		explode: ->
-			flake.explode(2500).animate() for flake in @flakes.vertices
-			@onAnimationEnd()
-			return @
-		implode: ->
-			flake.implode(2500).animate() for flake in @flakes.vertices
-			@onAnimationEnd()
-			return @
-		onAnimationEnd: ->
+		update: ->
+			for flake in @flakes.vertices
+				if flake.y < -200
+					flake.y = 200
+				if flake.x < -200
+					flake.x = 200
+				if flake.x > 200
+					flake.x = -200
+				else
+					flake.y -= 0.5 * Math.random()
+					flake.x -= 0.5 * Math.random()
 
+	# This is our flake (particle) - experimental !
 	class Flake extends THREE.Vector3
 		constructor: (vector, r=2) ->
 			@velocity = new THREE.Vector3 0, -Math.random() + 1, 0
@@ -84,56 +169,11 @@ $ ->
 			@x = vector.x
 			@y = vector.y
 			@z = vector.z
-
-
-			@implodeSet =
-				x: @x
-				y: @y
-				z: @z
-			@explodeSet =
-				x: @x * r
-				y: @y * r
-				z: @z * r
-
-			@explodeTween = new TWEEN.Tween(@).to(@explodeSet,2500).easing(TWEEN.Easing.Elastic.Out)
-			@flakeTween = new TWEEN.Tween(@).to({y: -200},800)
-			@implodeTween = new TWEEN.Tween(@).to(@implodeSet,2500).easing(TWEEN.Easing.Elastic.Out)
-
-			@explodeTween.onComplete => 
-				@flake
-			@flakeTween.onComplete =>
-				@y = 200
-				if @animation then @animation.chain(@flakeTween) else @animation = @flakeTween.start()
-
-			return @
-		explode: (t) ->
-			if @animation then @animation.chain(@explodeTween) else @animation = @explodeTween.start()
-			return @
-		implode: (t) ->
-			@animation = @implodeTween.start()
-			return @
-		flake: ->
-			@animation.chain(@flakeTween)
-			return @
-		animate: ->
-			@animation.start() if @animation
 			return @
 
-	PARTICLES_COUNT = 1500
-
-	storm = new FlakeStorm scene, geometry, PARTICLES_COUNT
-
-	animated = 1
-	$(document).click -> 
-		if animated is 1
-			storm.explode()
-			animated = 0
-		else
-			storm.implode()
-			animated = 1
+	storm = new FlakeStorm scene, geometry, FLAKES_COUNT
 
 	# Add sounds to the game
-	throw "Buzz is not installed" if not buzz?
 	soundOptions =
 		preload: true
 		autoplay: false
@@ -153,12 +193,21 @@ $ ->
 
 	buzz.all()
 
+	# Variable globale ?
+	percentX = .5
+	percentY = .5
+
 	# Render all that stuff
 	render = ->
 		TWEEN.update()
-		storm.system.rotation.y += 0.01
 		requestAnimationFrame render
 		renderer.render scene, camera
+		#camera.lookAt({x:0,y:0,z:0})
+		storm.update()
+		camX = percentX * 400 - 200
+		camZ = Math.sqrt( Math.pow(200,2) - Math.pow(camX,2) )
+		new TWEEN.Tween(camera.position).to({x: camX}, 980).easing(TWEEN.Easing.Cubic.Out).start();
+		composer.render(0.0001)
 	render()
 
 	# Give me some messages
@@ -177,19 +226,26 @@ $ ->
 			console.log trackrStatuses[e.status]
 
 	document.addEventListener 'facetrackingEvent', (e) ->
-		percentX = nerve = e.x / 320
-		percentY = e.y / 240
-
-		new TWEEN.Tween(camera.position).to({x: -percentX * 200, y: percentY * 200}, 980).easing(TWEEN.Easing.Cubic.Out).onUpdate(()->
-			#console.log @x
-		).start();
+		percentX = nerve = 1 - e.x / 318
+		percentY = 1 - e.y / 240
 
 		#sound update
 		track1.setVolume percentX * 100
 		track2.setVolume 100 - percentX * 100
 		track3.setVolume 100 - percentX * 150
 
+	# Will make the animation nice
+	lightenScreen = () ->
+		anim = new TWEEN.Tween({grayscale: 0, nIntensity: 0.1}).to({grayscale: 1, nIntensity: 3},500).easing(TWEEN.Easing.Cubic.Out)
+		anim.onUpdate ->
+			effectFilm.uniforms["grayscale"].value = this.grayscale
+			effectFilm.uniforms["nIntensity"].value = this.nIntensity
+		anim.start()
 
-	#for test purpose
-	window.camera = camera
-
+	# Will put the animation in background mode
+	darkenScreen = () ->
+		anim = new TWEEN.Tween({grayscale: 1, nIntensity: 3}).to({grayscale: 0, nIntensity: 0.1},500).easing(TWEEN.Easing.Cubic.Out)
+		anim.onUpdate ->
+			effectFilm.uniforms["grayscale"].value = this.grayscale
+			effectFilm.uniforms["nIntensity"].value = this.nIntensity
+		anim.start()
