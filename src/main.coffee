@@ -1,10 +1,30 @@
+###
+Head Tracking for Christmas Experiments http://christmasexperiments.com
+by RayFranco http://twitter.com/RayFranco http://github.com/RayFranco
+
+Credits :
+	Music sampled for this project by Irsih Steph
+	Skybox graphics by XXX
+Libraries :
+	Headtrackr
+	Three.js
+	Buzz
+
+Thanks to BigYouth, grgdvrt, David Ronai and mr.doob for advices and help
+Happy Birthday Caro <3
+
+This is coded in CoffeeScript, you should have a look at the non-minified file 
+here for more details
+###
+
+
+
 throw "jQuery is not installed" if not $?
 throw "Buzz is not installed" if not buzz?
 
 $ ->
-
 	# Configuration
-	FLAKES_COUNT 	= 15000
+	FLAKES_COUNT 	= 500
 	CAMERA_DISTANCE = 200
 
 	# Variables
@@ -22,19 +42,23 @@ $ ->
 	camera.position.z 	= 200
 	camera.position.y 	= 0
 
+	scene.add camera
+
 	# Set up the renderer
+	sceneCanvas = document.getElementById 'scene'
 	rParameters =
-		canvas: sceneCanvas
+		canvas: 	sceneCanvas
 		clearColor: 0xFFFFFF
 		clearAlpha: 0
-		antialias: false
-		autoClear: false
+		antialias: 	false
+		autoClear: 	false
 		gammaInput: true
-		gammaOutput: true
-		sort: false
-	sceneCanvas = document.getElementById 'scene'
-	renderer 	= new THREE.WebGLRenderer
+		gammaOutput:true
+		sort: 		false
+	renderer 	= new THREE.WebGLRenderer rParameters
 	renderer.setSize window.innerWidth, window.innerHeight
+
+	console.log renderer
 
 	# Post Processing
 	renderModel 	= new THREE.RenderPass scene, camera
@@ -88,8 +112,8 @@ $ ->
 	ballDown 	= new TWEEN.Tween(mesh.position).to({y:-20},5000).easing(TWEEN.Easing.Cubic.InOut)
 	ballUp 	 	= new TWEEN.Tween(mesh.position).to({y:20},5000).easing(TWEEN.Easing.Cubic.InOut)
 	start 		= new TWEEN.Tween(mesh.position).to({y:20},2500).start().chain(ballDown).easing(TWEEN.Easing.Cubic.Out)
-	ballDown.chain(ballUp) # Get up
-	ballUp.chain(ballDown) # Get down
+	ballDown.chain ballUp # Get up
+	ballUp.chain ballDown # Get down
 	
 	# Make the skybox, it's getting nice now !
 	shader 	 		= THREE.ShaderUtils.lib["cube"]
@@ -143,11 +167,8 @@ $ ->
 				#particle.explode()
 				@flakes.vertices.push(particle)
 			@system = new THREE.ParticleSystem @flakes, @material
-			console.log @flakes
 			@system.sortParticles = true;
-			console.log @flakes
 			@scene.add @system
-			console.log @flakes
 			return @
 		update: ->
 			for flake in @flakes.vertices
@@ -160,6 +181,7 @@ $ ->
 				else
 					flake.y -= 0.5 * Math.random()
 					flake.x -= 0.5 * Math.random()
+			@flakes.vertices.verticesNeedUpdate = true
 
 	# This is our flake (particle) - experimental !
 	class Flake extends THREE.Vector3
@@ -182,14 +204,15 @@ $ ->
 	track1 = new buzz.sound 'assets/loop1.wav', soundOptions
 	track2 = new buzz.sound 'assets/loop2.wav', soundOptions
 	track3 = new buzz.sound 'assets/loop3.wav', soundOptions
+
 	buzz.all().bindOnce 'canplaythrough', ->
-		console.log 'canplaythrough'
 		buzz.all().play()
 
 	# Set initial volumes
-	track1.setVolume 100
-	track2.setVolume 20
-	track3.setVolume 0
+
+	volume1 = 100
+	volume2 = 20
+	volume3 = 0
 
 	buzz.all()
 
@@ -200,42 +223,40 @@ $ ->
 	# Render all that stuff
 	render = ->
 		TWEEN.update()
+		storm.update()
 		requestAnimationFrame render
 		renderer.render scene, camera
-		#camera.lookAt({x:0,y:0,z:0})
-		storm.update()
+		camera.lookAt({x:0,y:0,z:0})
 		camX = percentX * 400 - 200
 		camZ = Math.sqrt( Math.pow(200,2) - Math.pow(camX,2) )
 		new TWEEN.Tween(camera.position).to({x: camX}, 980).easing(TWEEN.Easing.Cubic.Out).start();
 		composer.render(0.0001)
+		track1.setVolume volume1
+		track2.setVolume volume2
+		track3.setVolume volume3
 	render()
 
-	# Give me some messages
-	trackrStatuses =
-		"getUserMedia": "You got that camera"
-		"no getUserMedia": "u shy ? Turn that camera on..."
-		"camera found": "Camera is working"
-		"no camera": "Hey, u dat shy ?"
-		"detecting": "Don't hide, tryin to find u..."
-		"found": "Gotcha ! You can move now :)"
-		"lost": "Hey !! Where are ya ??"
-		"redetecting": "Tryin to find you again"
 
-	document.addEventListener 'headtrackrStatus', (e) ->
-		if e.status of trackrStatuses
-			console.log trackrStatuses[e.status]
+	# Event Listeners
+	onHeadTrackrStatus = (e) ->
+		if e.status is 'found'
+			lightenScreen()
+		else if e.status is 'lost' or e.status is 'redetecting'
+			darkenScreen()
 
-	document.addEventListener 'facetrackingEvent', (e) ->
+	onFaceTrackingEvent = (e) ->
 		percentX = nerve = 1 - e.x / 318
 		percentY = 1 - e.y / 240
-
 		#sound update
-		track1.setVolume percentX * 100
-		track2.setVolume 100 - percentX * 100
-		track3.setVolume 100 - percentX * 150
+		volume1 percentX * 100
+		volume2 = 100 - percentX * 100
+		volume3 100 - percentX * 150
+
+	document.addEventListener 'headtrackrStatus', onHeadTrackrStatus
+	document.addEventListener 'facetrackingEvent', onFaceTrackingEvent
 
 	# Will make the animation nice
-	lightenScreen = () ->
+	darkenScreen = () ->
 		anim = new TWEEN.Tween({grayscale: 0, nIntensity: 0.1}).to({grayscale: 1, nIntensity: 3},500).easing(TWEEN.Easing.Cubic.Out)
 		anim.onUpdate ->
 			effectFilm.uniforms["grayscale"].value = this.grayscale
@@ -243,7 +264,7 @@ $ ->
 		anim.start()
 
 	# Will put the animation in background mode
-	darkenScreen = () ->
+	lightenScreen = () ->
 		anim = new TWEEN.Tween({grayscale: 1, nIntensity: 3}).to({grayscale: 0, nIntensity: 0.1},500).easing(TWEEN.Easing.Cubic.Out)
 		anim.onUpdate ->
 			effectFilm.uniforms["grayscale"].value = this.grayscale
