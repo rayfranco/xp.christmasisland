@@ -33,40 +33,46 @@ here for more details
   }
 
   $(function() {
-    var CAMERA_DISTANCE, FLAKES_COUNT, Flake, FlakeStorm, ballDown, ballUp, camera, composer, darkenScreen, directionalLight, effectColorify, effectFilm, effectVignette, geometry, htracker, light, lightenScreen, material, mesh, nerve, onFaceTrackingEvent, onHeadTrackrStatus, percentX, percentY, pointLight, rParameters, render, renderModel, renderer, rtParameters, scene, sceneCanvas, shader, smParameters, soundOptions, start, storm, textureCube, track1, track2, track3, trackerCanvas, trackerVideo, urlPrefix, urls, volume1, volume2, volume3;
+    var CAMERA_DISTANCE, CAM_Y, CAM_Z, EXPLORE_TIME, FAR, FLAKES_COUNT, Flake, FlakeStorm, MIN_EXPLORE, NEAR, PERSPECTIVE, ball, ballDown, ballUp, camera, composer, darkenScreen, detected, directionalLight, effectFilm, effectVignette, explored_l, explored_r, geometry, helpExplore, htracker, light, lightenScreen, material, mesh, nerve, onFaceTrackingEvent, onHeadTrackrStatus, onWindowResize, pointLight, rParameters, render, renderModel, renderer, rtParameters, scene, sceneCanvas, shader, smParameters, soundOptions, start, storm, textureCube, track1, track2, track3, trackX, trackY, trackerCanvas, trackerVideo, urlPrefix, urls, volume1, volume2, volume3;
     FLAKES_COUNT = 500;
     CAMERA_DISTANCE = 200;
-    nerve = .5;
+    NEAR = 1;
+    FAR = 120000;
+    PERSPECTIVE = 75;
+    CAM_Z = 200;
+    CAM_Y = 0;
+    MIN_EXPLORE = .5;
+    EXPLORE_TIME = 5000;
+    nerve = .1;
+    explored_r = 0;
+    explored_l = 0;
+    detected = false;
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 120000);
-    camera.position.z = 200;
-    camera.position.y = 0;
+    camera = new THREE.PerspectiveCamera(PERSPECTIVE, window.innerWidth / window.innerHeight, NEAR, FAR);
+    camera.position.z = CAM_Z;
+    camera.position.y = CAM_Y;
     scene.add(camera);
     sceneCanvas = document.getElementById('scene');
     rParameters = {
       canvas: sceneCanvas,
-      clearColor: 0xFFFFFF,
-      clearAlpha: 0,
-      antialias: false,
-      autoClear: false,
-      gammaInput: true,
-      gammaOutput: true,
-      sort: false
+      antialias: false
     };
     renderer = new THREE.WebGLRenderer(rParameters);
     renderer.setSize(window.innerWidth, window.innerHeight);
-    console.log(renderer);
+    renderer.setClearColorHex(0x000000, 0);
+    renderer.autoClear = false;
+    renderer.gammaInput = true;
+    renderer.gammaOutput = true;
+    renderer.setSize(window.innerWidth, window.innerHeight);
     renderModel = new THREE.RenderPass(scene, camera);
     effectFilm = new THREE.FilmPass(3, 0.1, 0, true);
     effectVignette = new THREE.ShaderPass(THREE.VignetteShader);
-    effectColorify = new THREE.ShaderPass(THREE.ColorifyShader);
     effectVignette.uniforms["offset"].value = 0.8;
     effectVignette.uniforms["darkness"].value = 2;
     effectVignette.renderToScreen = true;
     rtParameters = {
       minFilter: THREE.LinearFilter,
       magFilter: THREE.LinearFilter,
-      format: THREE.RGBFormat,
       stencilBuffer: true
     };
     composer = new THREE.EffectComposer(renderer, new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, rtParameters));
@@ -90,19 +96,19 @@ here for more details
       color: 0xffffff,
       envMap: textureCube
     });
-    mesh = new THREE.Mesh(geometry, material);
-    mesh.position.x = 0;
-    mesh.position.y = 0;
-    mesh.position.z = 0;
-    mesh.scale.x = mesh.scale.y = mesh.scale.z = 1;
-    scene.add(mesh);
-    ballDown = new TWEEN.Tween(mesh.position).to({
+    ball = new THREE.Mesh(geometry, material);
+    ball.position.x = 0;
+    ball.position.y = 0;
+    ball.position.z = 0;
+    ball.scale.x = ball.scale.y = ball.scale.z = 1;
+    scene.add(ball);
+    ballDown = new TWEEN.Tween(ball.position).to({
       y: -20
     }, 5000).easing(TWEEN.Easing.Cubic.InOut);
-    ballUp = new TWEEN.Tween(mesh.position).to({
+    ballUp = new TWEEN.Tween(ball.position).to({
       y: 20
     }, 5000).easing(TWEEN.Easing.Cubic.InOut);
-    start = new TWEEN.Tween(mesh.position).to({
+    start = new TWEEN.Tween(ball.position).to({
       y: 20
     }, 2500).start().chain(ballDown).easing(TWEEN.Easing.Cubic.Out);
     ballDown.chain(ballUp);
@@ -171,8 +177,8 @@ here for more details
           if (flake.x > 200) {
             flake.x = -200;
           } else {
-            flake.y -= 0.5 * Math.random();
-            flake.x -= 0.5 * Math.random();
+            flake.y -= 50 * Math.random() * nerve;
+            flake.x -= 20 * Math.random() * nerve;
           }
         }
         return this.flakes.vertices.verticesNeedUpdate = true;
@@ -206,61 +212,95 @@ here for more details
       autoplay: false,
       loop: true
     };
-    track1 = new buzz.sound('assets/loop1.wav', soundOptions);
+    track3 = new buzz.sound('assets/loop1.wav', soundOptions);
     track2 = new buzz.sound('assets/loop2.wav', soundOptions);
-    track3 = new buzz.sound('assets/loop3.wav', soundOptions);
+    track1 = new buzz.sound('assets/loop3.wav', soundOptions);
     buzz.all().bindOnce('canplaythrough', function() {
       return buzz.all().play();
     });
     volume1 = 100;
-    volume2 = 20;
+    volume2 = 50;
     volume3 = 0;
-    buzz.all();
-    percentX = .5;
-    percentY = .5;
+    trackX = .5;
+    trackY = .5;
     render = function() {
       var camX, camZ;
+      requestAnimationFrame(render);
       TWEEN.update();
       storm.update();
-      requestAnimationFrame(render);
-      renderer.render(scene, camera);
       camera.lookAt({
         x: 0,
         y: 0,
         z: 0
       });
-      camX = percentX * 400 - 200;
-      camZ = Math.sqrt(Math.pow(200, 2) - Math.pow(camX, 2));
+      camX = trackX * 400 - 200;
+      camZ = Math.sqrt(Math.pow(201, 2) - Math.pow(camX, 2));
       new TWEEN.Tween(camera.position).to({
-        x: camX
+        x: camX,
+        z: camZ
       }, 980).easing(TWEEN.Easing.Cubic.Out).start();
-      composer.render(0.0001);
+      if (nerve > .5) {
+        ball.material.color.setRGB(1, 1 - (2 * nerve - 1), 1 - (2 * nerve - 1));
+      } else {
+        ball.material.color.setRGB(1, 1, 1);
+      }
       track1.setVolume(volume1);
       track2.setVolume(volume2);
-      return track3.setVolume(volume3);
+      track3.setVolume(volume3);
+      renderer.render(scene, camera);
+      return composer.render(0.005);
     };
     render();
     onHeadTrackrStatus = function(e) {
       if (e.status === 'found') {
-        return lightenScreen();
+        detected = true;
+        lightenScreen();
+        return setTimeout(helpExplore, EXPLORE_TIME);
       } else if (e.status === 'lost' || e.status === 'redetecting') {
+        detected = false;
         return darkenScreen();
       }
     };
     onFaceTrackingEvent = function(e) {
-      percentX = nerve = 1 - e.x / 318;
-      percentY = 1 - e.y / 240;
-      volume1(percentX * 100);
-      volume2 = 100 - percentX * 100;
-      return volume3(100 - percentX * 150);
+      var nexplored_l, nexplored_r;
+      trackX = nerve = 1 - e.x / 318;
+      trackY = 1 - e.y / 240;
+      if (trackX > .5) {
+        nexplored_r = trackX * 2 - .5;
+        if (explored_r < nexplored_r) {
+          explored_r = nexplored_r;
+        }
+      } else {
+        nexplored_l = trackX * 2;
+        if (explored_l < nexplored_l) {
+          explored_l = nexplored_l;
+        }
+      }
+      volume1 = trackX * 100;
+      volume2 = -100 * Math.cos(trackX * Math.PI * 1.5);
+      return volume3 = 100 - trackX * 150;
     };
-    document.addEventListener('headtrackrStatus', onHeadTrackrStatus);
-    document.addEventListener('facetrackingEvent', onFaceTrackingEvent);
+    onWindowResize = function(e) {
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      sceneCanvas.style.height = window.innerHeight + 'px';
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      return composer.reset(new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, rtParameters));
+    };
+    helpExplore = function() {
+      console.log('explore', explored_l, explored_r);
+      if (explored_l < MIN_EXPLORE) {
+        console.log('Step on your left !');
+      }
+      if (explored_r < MIN_EXPLORE) {
+        return console.log('Step on your right !');
+      }
+    };
     darkenScreen = function() {
       var anim;
       anim = new TWEEN.Tween({
         grayscale: 0,
-        nIntensity: 0.1
+        nIntensity: 0.3
       }).to({
         grayscale: 1,
         nIntensity: 3
@@ -271,14 +311,14 @@ here for more details
       });
       return anim.start();
     };
-    return lightenScreen = function() {
+    lightenScreen = function() {
       var anim;
       anim = new TWEEN.Tween({
         grayscale: 1,
         nIntensity: 3
       }).to({
         grayscale: 0,
-        nIntensity: 0.1
+        nIntensity: 0.3
       }, 500).easing(TWEEN.Easing.Cubic.Out);
       anim.onUpdate(function() {
         effectFilm.uniforms["grayscale"].value = this.grayscale;
@@ -286,6 +326,9 @@ here for more details
       });
       return anim.start();
     };
+    document.addEventListener('headtrackrStatus', onHeadTrackrStatus);
+    document.addEventListener('facetrackingEvent', onFaceTrackingEvent);
+    return window.addEventListener('resize', onWindowResize);
   });
 
 }).call(this);

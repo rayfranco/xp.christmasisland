@@ -26,9 +26,19 @@ $ ->
 	# Configuration
 	FLAKES_COUNT 	= 500
 	CAMERA_DISTANCE = 200
+	NEAR			= 1
+	FAR 			= 120000
+	PERSPECTIVE     = 75
+	CAM_Z 			= 200
+	CAM_Y 			= 0
+	MIN_EXPLORE		= .5 		# Minimum to explore to avoid tutorial
+	EXPLORE_TIME	= 5000 		# Countdown before the tutorial
 
 	# Variables
-	nerve = .5 		# Environment tension
+	nerve 			= .1 # Environment tension
+	explored_r 		= 0
+	explored_l		= 0
+	detected		= false
 
 	#
 	# Initialisation
@@ -38,9 +48,9 @@ $ ->
 	scene 	= new THREE.Scene()
 
 	# Set up the camera
-	camera 				= new THREE.PerspectiveCamera 75, window.innerWidth/window.innerHeight ,1, 120000
-	camera.position.z 	= 200
-	camera.position.y 	= 0
+	camera 				= new THREE.PerspectiveCamera PERSPECTIVE, window.innerWidth/window.innerHeight ,NEAR, FAR
+	camera.position.z 	= CAM_Z
+	camera.position.y 	= CAM_Y
 
 	scene.add camera
 
@@ -48,23 +58,19 @@ $ ->
 	sceneCanvas = document.getElementById 'scene'
 	rParameters =
 		canvas: 	sceneCanvas
-		clearColor: 0xFFFFFF
-		clearAlpha: 0
 		antialias: 	false
-		autoClear: 	false
-		gammaInput: true
-		gammaOutput:true
-		sort: 		false
-	renderer 	= new THREE.WebGLRenderer rParameters
+	renderer = new THREE.WebGLRenderer rParameters
 	renderer.setSize window.innerWidth, window.innerHeight
-
-	console.log renderer
+	renderer.setClearColorHex 0x000000, 0
+	renderer.autoClear = false
+	renderer.gammaInput = true
+	renderer.gammaOutput = true
+	renderer.setSize window.innerWidth, window.innerHeight
 
 	# Post Processing
 	renderModel 	= new THREE.RenderPass scene, camera
 	effectFilm 		= new THREE.FilmPass 3, 0.1, 0, true
 	effectVignette 	= new THREE.ShaderPass THREE.VignetteShader
-	effectColorify 	= new THREE.ShaderPass THREE.ColorifyShader
 
 	effectVignette.uniforms["offset"].value 	= 0.8;
 	effectVignette.uniforms["darkness"].value 	= 2;
@@ -73,7 +79,6 @@ $ ->
 	rtParameters = 
 		minFilter: THREE.LinearFilter
 		magFilter: THREE.LinearFilter
-		format: THREE.RGBFormat
 		stencilBuffer: true
 
 	composer = new THREE.EffectComposer renderer, new THREE.WebGLRenderTarget window.innerWidth, window.innerHeight, rtParameters
@@ -100,18 +105,18 @@ $ ->
 	# Load the main subject, a ball (yeah a ball, so what?)
 	geometry 		= new THREE.SphereGeometry( 100, 32, 16 );
 	material 		= new THREE.MeshBasicMaterial( { color: 0xffffff, envMap: textureCube } );
-	mesh 			= new THREE.Mesh geometry, material
-	mesh.position.x = 0 #Math.random() * 10000 - 5000
-	mesh.position.y = 0 #Math.random() * 10000 - 5000
-	mesh.position.z = 0 #Math.random() * 10000 - 5000
-	mesh.scale.x 	= mesh.scale.y = mesh.scale.z = 1;
+	ball 			= new THREE.Mesh geometry, material
+	ball.position.x = 0 
+	ball.position.y = 0
+	ball.position.z = 0
+	ball.scale.x 	= ball.scale.y = ball.scale.z = 1;
 
-	scene.add mesh
+	scene.add ball
 
 	# Let's animate the ball
-	ballDown 	= new TWEEN.Tween(mesh.position).to({y:-20},5000).easing(TWEEN.Easing.Cubic.InOut)
-	ballUp 	 	= new TWEEN.Tween(mesh.position).to({y:20},5000).easing(TWEEN.Easing.Cubic.InOut)
-	start 		= new TWEEN.Tween(mesh.position).to({y:20},2500).start().chain(ballDown).easing(TWEEN.Easing.Cubic.Out)
+	ballDown 	= new TWEEN.Tween(ball.position).to({y:-20},5000).easing(TWEEN.Easing.Cubic.InOut)
+	ballUp 	 	= new TWEEN.Tween(ball.position).to({y:20},5000).easing(TWEEN.Easing.Cubic.InOut)
+	start 		= new TWEEN.Tween(ball.position).to({y:20},2500).start().chain(ballDown).easing(TWEEN.Easing.Cubic.Out)
 	ballDown.chain ballUp # Get up
 	ballUp.chain ballDown # Get down
 	
@@ -179,15 +184,15 @@ $ ->
 				if flake.x > 200
 					flake.x = -200
 				else
-					flake.y -= 0.5 * Math.random()
-					flake.x -= 0.5 * Math.random()
+					flake.y -= 50 * Math.random() * nerve
+					flake.x -= 20 * Math.random() * nerve
 			@flakes.vertices.verticesNeedUpdate = true
 
 	# This is our flake (particle) - experimental !
 	class Flake extends THREE.Vector3
 		constructor: (vector, r=2) ->
-			@velocity = new THREE.Vector3 0, -Math.random() + 1, 0
-			@animation = null
+			@velocity 	= new THREE.Vector3 0, -Math.random() + 1, 0
+			@animation 	= null
 			@x = vector.x
 			@y = vector.y
 			@z = vector.z
@@ -201,9 +206,9 @@ $ ->
 		autoplay: false
 		loop: true
 
-	track1 = new buzz.sound 'assets/loop1.wav', soundOptions
+	track3 = new buzz.sound 'assets/loop1.wav', soundOptions
 	track2 = new buzz.sound 'assets/loop2.wav', soundOptions
-	track3 = new buzz.sound 'assets/loop3.wav', soundOptions
+	track1 = new buzz.sound 'assets/loop3.wav', soundOptions
 
 	buzz.all().bindOnce 'canplaythrough', ->
 		buzz.all().play()
@@ -211,53 +216,75 @@ $ ->
 	# Set initial volumes
 
 	volume1 = 100
-	volume2 = 20
+	volume2 = 50
 	volume3 = 0
 
-	buzz.all()
-
 	# Variable globale ?
-	percentX = .5
-	percentY = .5
+	trackX = .5
+	trackY = .5
 
 	# Render all that stuff
 	render = ->
+		requestAnimationFrame render
 		TWEEN.update()
 		storm.update()
-		requestAnimationFrame render
-		renderer.render scene, camera
 		camera.lookAt({x:0,y:0,z:0})
-		camX = percentX * 400 - 200
-		camZ = Math.sqrt( Math.pow(200,2) - Math.pow(camX,2) )
-		new TWEEN.Tween(camera.position).to({x: camX}, 980).easing(TWEEN.Easing.Cubic.Out).start();
-		composer.render(0.0001)
+		camX = trackX * 400 - 200
+		camZ = Math.sqrt( Math.pow(201,2) - Math.pow(camX,2) )
+		new TWEEN.Tween(camera.position).to({x: camX, z: camZ}, 980).easing(TWEEN.Easing.Cubic.Out).start();
+		if nerve > .5 then ball.material.color.setRGB 1,1-(2*nerve-1),1-(2*nerve-1) else ball.material.color.setRGB 1, 1, 1
 		track1.setVolume volume1
 		track2.setVolume volume2
 		track3.setVolume volume3
+		renderer.render scene, camera
+		composer.render 0.005
 	render()
-
 
 	# Event Listeners
 	onHeadTrackrStatus = (e) ->
 		if e.status is 'found'
+			detected = true
 			lightenScreen()
+			setTimeout helpExplore, EXPLORE_TIME
 		else if e.status is 'lost' or e.status is 'redetecting'
+			detected = false
 			darkenScreen()
 
 	onFaceTrackingEvent = (e) ->
-		percentX = nerve = 1 - e.x / 318
-		percentY = 1 - e.y / 240
-		#sound update
-		volume1 percentX * 100
-		volume2 = 100 - percentX * 100
-		volume3 100 - percentX * 150
+		trackX = nerve = 1 - e.x / 318
+		trackY = 1 - e.y / 240
 
-	document.addEventListener 'headtrackrStatus', onHeadTrackrStatus
-	document.addEventListener 'facetrackingEvent', onFaceTrackingEvent
+		# Update explored area
+		if trackX > .5
+			nexplored_r = trackX * 2 - .5
+			explored_r = nexplored_r if explored_r < nexplored_r
+		else
+			nexplored_l = trackX * 2
+			explored_l = nexplored_l if explored_l < nexplored_l
+
+		# Update sound tracks volume
+		volume1 = trackX * 100
+		volume2 = -100 * Math.cos(trackX*Math.PI*1.5)
+		volume3 = 100 - trackX * 150
+
+	onWindowResize = (e) ->
+		renderer.setSize window.innerWidth, window.innerHeight
+		sceneCanvas.style.height = window.innerHeight+'px'
+		camera.aspect = window.innerWidth / window.innerHeight
+		camera.updateProjectionMatrix()
+		composer.reset new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, rtParameters)
+
+	# Tracking tutorial
+	helpExplore = () ->
+		console.log 'explore',explored_l,explored_r
+		if explored_l < MIN_EXPLORE
+			console.log 'Step on your left !'
+		if explored_r < MIN_EXPLORE
+			console.log 'Step on your right !'
 
 	# Will make the animation nice
 	darkenScreen = () ->
-		anim = new TWEEN.Tween({grayscale: 0, nIntensity: 0.1}).to({grayscale: 1, nIntensity: 3},500).easing(TWEEN.Easing.Cubic.Out)
+		anim = new TWEEN.Tween({grayscale: 0, nIntensity: 0.3}).to({grayscale: 1, nIntensity: 3},500).easing(TWEEN.Easing.Cubic.Out)
 		anim.onUpdate ->
 			effectFilm.uniforms["grayscale"].value = this.grayscale
 			effectFilm.uniforms["nIntensity"].value = this.nIntensity
@@ -265,8 +292,12 @@ $ ->
 
 	# Will put the animation in background mode
 	lightenScreen = () ->
-		anim = new TWEEN.Tween({grayscale: 1, nIntensity: 3}).to({grayscale: 0, nIntensity: 0.1},500).easing(TWEEN.Easing.Cubic.Out)
+		anim = new TWEEN.Tween({grayscale: 1, nIntensity: 3}).to({grayscale: 0, nIntensity: 0.3},500).easing(TWEEN.Easing.Cubic.Out)
 		anim.onUpdate ->
 			effectFilm.uniforms["grayscale"].value = this.grayscale
 			effectFilm.uniforms["nIntensity"].value = this.nIntensity
 		anim.start()
+
+	document.addEventListener 'headtrackrStatus', onHeadTrackrStatus
+	document.addEventListener 'facetrackingEvent', onFaceTrackingEvent
+	window.addEventListener 'resize', onWindowResize
