@@ -9,21 +9,26 @@ task 'setup', ->
 		console.log stdout
 
 task 'build:dev', ->
-    compile 'src/main.coffee', 'app/main.js'
+    compile 'src/main.coffee', 'app/assets/js/main.js'
 
 task 'build:prod', ->
     bundle [
-      'vendor/threejs/index.js',
+      'vendor/jquery/index.js',
+      'vendor/tween/index.js',
       'vendor/headtrackr/headtrackr.js',
+      'vendor/threejs/index.js',
+      'vendor/CopyShader/index.js',
+      'vendor/ConvolutionShader/index.js',
+      'vendor/FilmShader/index.js',
+      'vendor/MaskPass/index.js',
+      'vendor/EffectComposer/index.js'
+      'vendor/RenderPass/index.js',
+      'vendor/ShaderPass/index.js',
+      'vendor/FilmPass/index.js',
+      'vendor/VignetteShader/index.js',
+      'vendor/buzz/index.js',
       'src/main.coffee'
-    ], 'app/main.js'
-
-task 'package', ->
-  bundle [
-    'src/Ambiance.coffee',
-    'src/Particle.coffee',
-    'src/main.coffee'
-  ], 'app/app.js'
+    ], 'app/assets/js/main.js'
 
 task 'build', ->
 	console.log 'Building the sources...'

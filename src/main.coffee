@@ -23,6 +23,13 @@ throw "jQuery is not installed" if not $?
 throw "Buzz is not installed" if not buzz?
 
 $ ->
+
+	# Test if browser is supported
+	if false
+		console.log 'no supported'
+		$('#browserNotSupported').show()
+		return
+
 	# Configuration
 	FLAKES_COUNT 	= 500
 	CAMERA_DISTANCE = 200
@@ -35,11 +42,11 @@ $ ->
 	EXPLORE_TIME	= 5000 		# Countdown before the tutorial
 
 	# Variables
+	started 		= false
 	nerve 			= .1 # Environment tension
 	explored_r 		= 0
 	explored_l		= 0
 	detected		= false
-
 	#
 	# Initialisation
 	#
@@ -93,7 +100,7 @@ $ ->
 	htracker 		= new headtrackr.Tracker({ui: false, headPosition: true, calcAngles: false})
 
 	htracker.init trackerVideo, trackerCanvas
-	htracker.start() 	# We will listen to events later, get ready !
+	# htracker.start() 	# We will listen to events later, get ready !
 
 	# Load the skybox textures
 	urlPrefix 	= "assets/textures/skybox/"
@@ -161,7 +168,7 @@ $ ->
 			@flakes = new THREE.Geometry()
 			@material = new THREE.ParticleBasicMaterial({
 				size: 5,
-				map: THREE.ImageUtils.loadTexture("assets/particle.png"),
+				map: THREE.ImageUtils.loadTexture("assets/textures/particle.png"),
 				blending: THREE.AdditiveBlending,
 				transparent: true
 			})
@@ -206,20 +213,22 @@ $ ->
 		autoplay: false
 		loop: true
 
-	track3 = new buzz.sound 'assets/loop1.wav', soundOptions
-	track2 = new buzz.sound 'assets/loop2.wav', soundOptions
-	track1 = new buzz.sound 'assets/loop3.wav', soundOptions
+	intro  = new buzz.sound 'assets/sounds/christmasisland.mp3', soundOptions
+	track3 = new buzz.sound 'assets/sounds/loop1.wav', soundOptions
+	track2 = new buzz.sound 'assets/sounds/loop2.wav', soundOptions
+	track1 = new buzz.sound 'assets/sounds/loop3.wav', soundOptions
+	tracks = new buzz.group [track1, track2, track3]
 
-	buzz.all().bindOnce 'canplaythrough', ->
-		buzz.all().play()
+	intro.bindOnce 'canplay', ->
+		intro.play()
 
 	# Set initial volumes
 
-	volume1 = 100
-	volume2 = 50
-	volume3 = 0
+	volume1 = 0
+	volume2 = 20
+	volume3 = 100
 
-	# Variable globale ?
+	# Initial head position set up
 	trackX = .5
 	trackY = .5
 
@@ -249,6 +258,8 @@ $ ->
 		else if e.status is 'lost' or e.status is 'redetecting'
 			detected = false
 			darkenScreen()
+		else if e.status is 'camera found'
+			onCameraFound()
 
 	onFaceTrackingEvent = (e) ->
 		trackX = nerve = 1 - e.x / 318
@@ -264,7 +275,7 @@ $ ->
 
 		# Update sound tracks volume
 		volume1 = trackX * 100
-		volume2 = -100 * Math.cos(trackX*Math.PI*1.5)
+		volume2 = -100 * Math.cos(trackX*Math.PI)
 		volume3 = 100 - trackX * 150
 
 	onWindowResize = (e) ->
@@ -276,11 +287,17 @@ $ ->
 
 	# Tracking tutorial
 	helpExplore = () ->
-		console.log 'explore',explored_l,explored_r
-		if explored_l < MIN_EXPLORE
-			console.log 'Step on your left !'
-		if explored_r < MIN_EXPLORE
-			console.log 'Step on your right !'
+		if explored_l < MIN_EXPLORE or explored_r < MIN_EXPLORE
+			$('#int-tutorial').fadeIn(300)
+			if explored_l < MIN_EXPLORE
+				$('#int-tutorial .left').delay(300).fadeIn(300)
+			if explored_r < MIN_EXPLORE
+				$('#int-tutorial .right').delay(300).fadeIn(300)
+				console.log 'Step on your right !'
+			setTimeout hideHelp, 2000
+
+	hideHelp = () ->
+		$('#int-tutorial').fadeOut()
 
 	# Will make the animation nice
 	darkenScreen = () ->
@@ -298,6 +315,22 @@ $ ->
 			effectFilm.uniforms["nIntensity"].value = this.nIntensity
 		anim.start()
 
+	onCameraFound = () ->
+		# Switch to sound advice
+		$('#tutorial .container.allowCamera:first').fadeOut ->
+			$('#tutorial .container.louder').fadeIn()
+
+	onStart = () ->
+		$('#tutorial').fadeOut()
+		htracker.start()
+		intro.fadeOut 300, ->
+			tracks.play()
+
+
 	document.addEventListener 'headtrackrStatus', onHeadTrackrStatus
 	document.addEventListener 'facetrackingEvent', onFaceTrackingEvent
 	window.addEventListener 'resize', onWindowResize
+
+	$('#tutorial a').click (e) ->
+		e.preventDefault()
+		onStart()
